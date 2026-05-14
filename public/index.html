@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VulnDB | Vulnerability Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Highlight.js for Script Preview -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/powershell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/languages/dos.min.js"></script>
+
+    <!-- CodeMirror for Editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/ayu-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/shell/shell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/powershell/powershell.min.js"></script>
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #24272C;
+            color: #A0A5B5;
+            min-height: 100vh;
+        }
+
+        /* Neumorphism Classes */
+        .neu-flat {
+            background: #24272C;
+            box-shadow: 10px 10px 20px #1a1c20, -10px -10px 20px #2e3238;
+        }
+
+        .neu-pressed {
+            background: #24272C;
+            box-shadow: inset 6px 6px 12px #1a1c20, inset -6px -6px 12px #2e3238;
+        }
+
+        .neu-btn {
+            background: #24272C;
+            box-shadow: 5px 5px 10px #1a1c20, -5px -5px 10px #2e3238;
+            transition: all 0.2s ease;
+        }
+
+        .neu-btn:active,
+        .neu-btn:hover:active {
+            box-shadow: inset 4px 4px 8px #1a1c20, inset -4px -4px 8px #2e3238;
+            transform: translateY(2px);
+        }
+
+        .neu-btn:hover {
+            box-shadow: 7px 7px 14px #1a1c20, -7px -7px 14px #2e3238;
+        }
+
+        .neu-input {
+            background: #24272C;
+            box-shadow: inset 5px 5px 10px #1a1c20, inset -5px -5px 10px #2e3238;
+            color: #E2E8F0;
+            border: none;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .neu-input:focus {
+            box-shadow: inset 7px 7px 14px #151619, inset -7px -7px 14px #33383f;
+        }
+
+        /* Typography Highlights */
+        .text-glow-pink {
+            color: #ec4899;
+            text-shadow: 0 0 10px rgba(236, 72, 153, 0.4);
+        }
+
+        .text-glow-cyan {
+            color: #06b6d4;
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+        }
+
+        /* Modal Animation */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.9);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #24272C;
+            box-shadow: inset 2px 2px 5px #1a1c20, inset -2px -2px 5px #2e3238;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #2e3238;
+            border-radius: 4px;
+        }
+
+        /* Syntax Highlighting & CodeMirror Customization */
+        .hljs {
+            background: transparent !important;
+            padding: 0 !important;
+        }
+        .CodeMirror {
+            height: 250px;
+            border-radius: 0.75rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.875rem;
+            background: #24272C !important;
+            box-shadow: inset 5px 5px 10px #1a1c20, inset -5px -5px 10px #2e3238;
+            color: #E2E8F0;
+            border: none !important;
+            padding: 10px;
+        }
+        .CodeMirror-gutters {
+            background: #24272C !important;
+            border-right: 1px solid #2e3238 !important;
+        }
+    </style>
+</head>
+
+<body class="relative overflow-x-hidden p-6 md:p-12">
+
+    <div class="max-w-7xl mx-auto neu-flat rounded-[3rem] p-8 md:p-12">
+        <header
+            class="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 border-b border-[#2e3238] pb-8 gap-6">
+            <div>
+                <h1 class="text-4xl font-extrabold text-white mb-2">
+                    VulnDB <span class="text-glow-pink">Nexus</span>
+                </h1>
+                <p class="text-[#8b91a3] font-light">Cultivate and deploy vulnerabilities and misconfigurations</p>
+            </div>
+            <button onclick="openVulnModal()"
+                class="neu-btn text-glow-cyan font-bold py-4 px-8 rounded-2xl flex items-center gap-3 w-full md:w-auto justify-center tracking-wide uppercase text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                        clip-rule="evenodd" />
+                </svg>
+                New Vulnerability
+            </button>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-4 mb-8">
+            <div class="flex-1 relative">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-[#8b91a3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input type="text" id="search-input" placeholder="Search vulnerabilities..." class="w-full neu-input rounded-xl pl-12 pr-5 py-3">
+            </div>
+            <select id="filter-platform" class="w-full md:w-48 neu-input rounded-xl px-5 py-3 appearance-none font-semibold text-sm uppercase tracking-wider text-[#A0A5B5]">
+                <option value="">All Platforms</option>
+                <option value="linux">Linux</option>
+                <option value="windows">Windows</option>
+                <option value="both">Both</option>
+            </select>
+            <select id="filter-target" class="w-full md:w-48 neu-input rounded-xl px-5 py-3 appearance-none font-semibold text-sm uppercase tracking-wider text-[#A0A5B5]">
+                <option value="">All Targets</option>
+                <option value="os">OS</option>
+                <option value="service">Service</option>
+            </select>
+        </div>
+
+        <main id="vuln-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            <!-- Vulnerabilities will be injected here -->
+            <div class="flex justify-center items-center h-48 col-span-full">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Vulnerability Modal -->
+    <div id="vuln-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeVulnModal()"></div>
+        <div class="neu-flat w-full max-w-md p-10 rounded-3xl relative z-10 modal-enter">
+            <h2 id="vuln-modal-title" class="text-2xl font-bold mb-8 text-glow-pink uppercase tracking-wider">Add
+                Vulnerability</h2>
+            <form id="vuln-form" onsubmit="saveVuln(event)">
+                <input type="hidden" id="vuln-id">
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Name</label>
+                    <input type="text" id="vuln-name" required class="w-full neu-input rounded-xl px-5 py-4">
+                </div>
+                <div class="mb-6">
+                    <label
+                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Platform</label>
+                    <select id="vuln-platform" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        <option value="linux">Linux</option>
+                        <option value="windows">Windows</option>
+                        <option value="both">Both</option>
+                    </select>
+                </div>
+                <div class="mb-10">
+                    <label
+                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Target</label>
+                    <select id="vuln-target" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        <option value="os">OS</option>
+                        <option value="service">Service</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-5">
+                    <button type="button" onclick="closeVulnModal()"
+                        class="neu-btn px-6 py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-sm">Cancel</button>
+                    <button type="submit"
+                        class="neu-btn px-8 py-3 rounded-xl text-glow-pink font-bold uppercase text-sm">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Misconfig Modal -->
+    <div id="misconfig-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeMisconfigModal()"></div>
+        <div class="neu-flat w-full max-w-lg p-10 rounded-3xl relative z-10 modal-enter">
+            <h2 id="misconfig-modal-title" class="text-2xl font-bold mb-8 text-glow-cyan uppercase tracking-wider">Add
+                Misconfig</h2>
+            <form id="misconfig-form" onsubmit="saveMisconfig(event)">
+                <input type="hidden" id="misconfig-id">
+                <input type="hidden" id="misconfig-vuln-id">
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Type</label>
+                    <select id="misconfig-type" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        <option value="bash">Bash</option>
+                        <option value="powershell">PowerShell</option>
+                        <option value="command">Command</option>
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Run
+                        As</label>
+                    <select id="misconfig-run-as" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        <option value="root">Root</option>
+                        <option value="administrator">Administrator</option>
+                        <option value="user">User</option>
+                    </select>
+                </div>
+                <div class="mb-10">
+                    <label
+                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Script</label>
+                    <textarea id="misconfig-script" rows="4"
+                        class="w-full neu-input rounded-xl px-5 py-4 font-mono text-sm leading-relaxed"></textarea>
+                </div>
+                <div class="flex justify-end gap-5">
+                    <button type="button" onclick="closeMisconfigModal()"
+                        class="neu-btn px-6 py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-sm">Cancel</button>
+                    <button type="submit"
+                        class="neu-btn px-8 py-3 rounded-xl text-glow-cyan font-bold uppercase text-sm">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Modal -->
+    <div id="confirm-modal" class="fixed inset-0 flex items-center justify-center z-[60] hidden">
+        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeConfirmModal()"></div>
+        <div class="neu-flat w-full max-w-sm p-8 rounded-3xl relative z-10 modal-enter text-center">
+            <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center neu-pressed text-[#ec4899]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <h2 id="confirm-modal-title" class="text-xl font-bold mb-3 text-[#E2E8F0] uppercase tracking-wider">Confirm Action</h2>
+            <p id="confirm-modal-message" class="text-sm text-[#A0A5B5] mb-8 leading-relaxed">Are you sure?</p>
+            <div class="flex justify-center gap-4">
+                <button type="button" onclick="closeConfirmModal()" class="flex-1 neu-btn py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-xs tracking-wide">Cancel</button>
+                <button type="button" id="confirm-modal-btn" class="flex-1 neu-btn py-3 rounded-xl text-[#ec4899] font-bold uppercase text-xs tracking-wide" style="text-shadow: 0 0 10px rgba(236,72,153,0.4)">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>
