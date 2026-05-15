@@ -9,16 +9,69 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || '127.0.0.1',
-    port: process.env.DB_PORT || 3307,
-    user: process.env.DB_USER || 'vulndb',
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'vulns',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+const { Client } = require('ssh2');
+const net = require('net');
+
+let pool;
+
+const setupDatabase = () => {
+    return new Promise((resolve, reject) => {
+        const sshClient = new Client();
+        
+        // Start a local server to pipe to the SSH tunnel
+        const server = net.createServer(socket => {
+            sshClient.forwardOut(
+                socket.remoteAddress,
+                socket.remotePort,
+                process.env.DB_HOST || '127.0.0.1',
+                process.env.DB_PORT || 3306,
+                (err, stream) => {
+                    if (err) {
+                        console.error('SSH forwardOut error:', err);
+                        socket.end();
+                        return;
+                    }
+                    socket.pipe(stream).pipe(socket);
+                }
+            );
+        });
+
+        sshClient.on('ready', () => {
+            console.log('SSH tunnel established');
+            
+            // Listen on a random free port for the local port forwarder
+            server.listen(0, '127.0.0.1', () => {
+                const localPort = server.address().port;
+                console.log(`Local port forwarder listening on port ${localPort}`);
+                
+                // Initialize the MySQL pool to connect to the local port forwarder
+                pool = mysql.createPool({
+                    host: '127.0.0.1',
+                    port: localPort,
+                    user: process.env.DB_USER,
+                    password: process.env.DB_PASSWORD,
+                    database: process.env.DB_NAME,
+                    waitForConnections: true,
+                    connectionLimit: 10,
+                    queueLimit: 0
+                });
+                
+                resolve();
+            });
+        }).on('error', err => {
+            console.error('SSH connection error:', err);
+            reject(err);
+        });
+
+        // Connect SSH using credentials from .env
+        sshClient.connect({
+            host: process.env.SSH_HOST,
+            port: process.env.SSH_PORT || 22,
+            username: process.env.SSH_USER,
+            password: process.env.SSH_PASSWORD
+        });
+    });
+};
 
 // GET all vulnerabilities
 app.get('/api/vulns', async (req, res) => {
@@ -117,6 +170,11 @@ app.delete('/api/misconfigs/:id', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+setupDatabase().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}).catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
 });
