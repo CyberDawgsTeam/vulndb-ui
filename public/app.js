@@ -98,7 +98,10 @@ function render() {
             <div class="flex justify-between items-start mb-3">
                 <div>
                     <h3 class="text-base font-bold text-[var(--text)] mb-1.5 tracking-wide">${vuln.name}</h3>
-                    <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-pink well uppercase tracking-wider">${vuln.target}: ${vuln.platform}</span>
+                    <span class="inline-flex gap-1.5">
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-pink well uppercase tracking-wider">${vuln.target}</span>
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-cyan well uppercase tracking-wider">${vuln.platform}</span>
+                    </span>
                 </div>
                 <div class="flex gap-2 shrink-0">
                     <button onclick='editVuln(${JSON.stringify(vuln).replace(/'/g, "&apos;")})' class="p-2 btn rounded-lg text-glow-cyan" title="Edit Vulnerability">
