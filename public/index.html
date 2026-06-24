@@ -5,9 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VulnDB | Vulnerability Manager</title>
+    <script>
+        // Set theme before first paint to avoid a flash of the wrong theme.
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('vulndb-theme') || 'dark');
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
-    
+
     <!-- Highlight.js for Script Preview -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
@@ -22,69 +26,100 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/shell/shell.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/powershell/powershell.min.js"></script>
     <style>
+        :root {
+            --bg: #14161a;
+            --surface: #212429;
+            --surface-2: #1a1d22;
+            --border: #2d3038;
+            --text: #e7eaf0;
+            --text-muted: #9aa0b0;
+            --text-faint: #686f7d;
+            --accent-pink: #ec4899;
+            --accent-cyan: #06b6d4;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.55);
+            /* Code previews stay on a fixed dark surface in both themes so syntax-highlighting contrast holds. */
+            --code-bg: #181a1e;
+            --code-border: #2a2d34;
+        }
+
+        [data-theme="light"] {
+            --bg: #e9ebef;
+            --surface: #ffffff;
+            --surface-2: #f1f2f5;
+            --border: #dfe2e8;
+            --text: #1c2030;
+            --text-muted: #5a6170;
+            --text-faint: #9098a8;
+            --accent-pink: #db2777;
+            --accent-cyan: #0891b2;
+            --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+            --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.18);
+        }
+
         body {
             font-family: 'Outfit', sans-serif;
-            background-color: #24272C;
-            color: #A0A5B5;
+            background-color: var(--bg);
+            color: var(--text-muted);
             min-height: 100vh;
+            transition: background-color 0.15s ease, color 0.15s ease;
         }
 
-        /* Neumorphism Classes */
-        .neu-flat {
-            background: #24272C;
-            box-shadow: 10px 10px 20px #1a1c20, -10px -10px 20px #2e3238;
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
         }
 
-        .neu-pressed {
-            background: #24272C;
-            box-shadow: inset 6px 6px 12px #1a1c20, inset -6px -6px 12px #2e3238;
+        .card.modal-panel {
+            box-shadow: var(--shadow-lg);
         }
 
-        .neu-btn {
-            background: #24272C;
-            box-shadow: 5px 5px 10px #1a1c20, -5px -5px 10px #2e3238;
-            transition: all 0.2s ease;
+        .well {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
         }
 
-        .neu-btn:active,
-        .neu-btn:hover:active {
-            box-shadow: inset 4px 4px 8px #1a1c20, inset -4px -4px 8px #2e3238;
-            transform: translateY(2px);
+        .btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
         }
 
-        .neu-btn:hover {
-            box-shadow: 7px 7px 14px #1a1c20, -7px -7px 14px #2e3238;
+        .btn:hover {
+            border-color: var(--text-faint);
         }
 
-        .neu-input {
-            background: #24272C;
-            box-shadow: inset 5px 5px 10px #1a1c20, inset -5px -5px 10px #2e3238;
-            color: #E2E8F0;
-            border: none;
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .input-field {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
             outline: none;
-            transition: all 0.3s ease;
+            transition: border-color 0.15s ease;
         }
 
-        .neu-input:focus {
-            box-shadow: inset 7px 7px 14px #151619, inset -7px -7px 14px #33383f;
+        .input-field:focus {
+            border-color: var(--accent-cyan);
         }
 
-        /* Typography Highlights */
         .text-glow-pink {
-            color: #ec4899;
-            text-shadow: 0 0 10px rgba(236, 72, 153, 0.4);
+            color: var(--accent-pink);
         }
 
         .text-glow-cyan {
-            color: #06b6d4;
-            text-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+            color: var(--accent-cyan);
         }
 
         /* Modal Animation */
         .modal-enter {
             opacity: 0;
-            transform: scale(0.9);
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: scale(0.96);
+            transition: opacity 0.2s ease, transform 0.2s ease;
         }
 
         .modal-enter-active {
@@ -98,13 +133,11 @@
         }
 
         .custom-scrollbar::-webkit-scrollbar-track {
-            background: #24272C;
-            box-shadow: inset 2px 2px 5px #1a1c20, inset -2px -2px 5px #2e3238;
-            border-radius: 4px;
+            background: transparent;
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #2e3238;
+            background: var(--border);
             border-radius: 4px;
         }
 
@@ -113,167 +146,176 @@
             background: transparent !important;
             padding: 0 !important;
         }
+
         .CodeMirror {
-            height: 250px;
-            border-radius: 0.75rem;
+            height: 220px;
+            border-radius: 0.5rem;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
             font-size: 0.875rem;
-            background: #24272C !important;
-            box-shadow: inset 5px 5px 10px #1a1c20, inset -5px -5px 10px #2e3238;
-            color: #E2E8F0;
-            border: none !important;
-            padding: 10px;
+            border: 1px solid var(--code-border) !important;
+            padding: 8px;
         }
+
         .CodeMirror-gutters {
-            background: #24272C !important;
-            border-right: 1px solid #2e3238 !important;
+            border-right: 1px solid var(--code-border) !important;
         }
     </style>
 </head>
 
-<body class="relative overflow-x-hidden p-6 md:p-12">
+<body class="relative overflow-x-hidden p-4 md:p-6">
 
-    <div class="max-w-7xl mx-auto neu-flat rounded-[3rem] p-8 md:p-12">
+    <div class="max-w-7xl mx-auto card rounded-2xl p-5 md:p-7">
         <header
-            class="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 border-b border-[#2e3238] pb-8 gap-6">
+            class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-[var(--border)] pb-4 gap-4">
             <div>
-                <h1 class="text-4xl font-extrabold text-white mb-2">
+                <h1 class="text-2xl md:text-3xl font-bold text-[var(--text)] mb-1">
                     VulnDB <span class="text-glow-pink">Nexus</span>
                 </h1>
-                <p class="text-[#8b91a3] font-light">Cultivate and deploy vulnerabilities and misconfigurations</p>
+                <p class="text-[var(--text-faint)] text-sm">Cultivate and deploy vulnerabilities and misconfigurations</p>
             </div>
-            <button onclick="openVulnModal()"
-                class="neu-btn text-glow-cyan font-bold py-4 px-8 rounded-2xl flex items-center gap-3 w-full md:w-auto justify-center tracking-wide uppercase text-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd"
-                        d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-                        clip-rule="evenodd" />
-                </svg>
-                New Vulnerability
-            </button>
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme"
+                    class="btn rounded-lg p-2.5 flex items-center justify-center shrink-0">
+                    <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1.5m0 15V21m9-9h-1.5m-15 0H3m15.364 6.364l-1.06-1.06M6.696 6.696l-1.06-1.06m12.728 0l-1.06 1.06M6.696 17.304l-1.06 1.06M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" />
+                    </svg>
+                    <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 1020.354 15.354z" />
+                    </svg>
+                </button>
+                <button onclick="openVulnModal()"
+                    class="btn text-glow-cyan font-bold py-2.5 px-5 rounded-lg flex items-center gap-2 flex-1 md:flex-initial justify-center tracking-wide uppercase text-xs">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    New Vulnerability
+                </button>
+            </div>
         </header>
 
-        <div class="flex flex-col md:flex-row gap-4 mb-8">
+        <div class="flex flex-col md:flex-row gap-3 mb-5">
             <div class="flex-1 relative">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute left-4 top-1/2 transform -translate-y-1/2 text-[#8b91a3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                <input type="text" id="search-input" placeholder="Search vulnerabilities..." class="w-full neu-input rounded-xl pl-12 pr-5 py-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 absolute left-3.5 top-1/2 transform -translate-y-1/2 text-[var(--text-faint)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input type="text" id="search-input" placeholder="Search vulnerabilities..." class="w-full input-field rounded-lg pl-10 pr-4 py-2.5 text-sm">
             </div>
-            <select id="filter-platform" class="w-full md:w-48 neu-input rounded-xl px-5 py-3 appearance-none font-semibold text-sm uppercase tracking-wider text-[#A0A5B5]">
+            <select id="filter-platform" class="w-full md:w-44 input-field rounded-lg px-4 py-2.5 appearance-none font-semibold text-xs uppercase tracking-wider">
                 <option value="">All Platforms</option>
                 <option value="linux">Linux</option>
                 <option value="windows">Windows</option>
                 <option value="both">Both</option>
             </select>
-            <select id="filter-target" class="w-full md:w-48 neu-input rounded-xl px-5 py-3 appearance-none font-semibold text-sm uppercase tracking-wider text-[#A0A5B5]">
+            <select id="filter-target" class="w-full md:w-44 input-field rounded-lg px-4 py-2.5 appearance-none font-semibold text-xs uppercase tracking-wider">
                 <option value="">All Targets</option>
                 <option value="os">OS</option>
                 <option value="service">Service</option>
             </select>
         </div>
 
-        <main id="vuln-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+        <main id="vuln-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Vulnerabilities will be injected here -->
             <div class="flex justify-center items-center h-48 col-span-full">
-                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500"></div>
+                <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[var(--accent-pink)]"></div>
             </div>
         </main>
     </div>
 
     <!-- Vulnerability Modal -->
-    <div id="vuln-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
-        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeVulnModal()"></div>
-        <div class="neu-flat w-full max-w-md p-10 rounded-3xl relative z-10 modal-enter">
-            <h2 id="vuln-modal-title" class="text-2xl font-bold mb-8 text-glow-pink uppercase tracking-wider">Add
+    <div id="vuln-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4">
+        <div class="absolute inset-0 bg-black/55 backdrop-blur-sm" onclick="closeVulnModal()"></div>
+        <div class="card modal-panel w-full max-w-md p-6 rounded-xl relative z-10 modal-enter">
+            <h2 id="vuln-modal-title" class="text-lg font-bold mb-5 text-glow-pink uppercase tracking-wider">Add
                 Vulnerability</h2>
             <form id="vuln-form" onsubmit="saveVuln(event)">
                 <input type="hidden" id="vuln-id">
-                <div class="mb-6">
-                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Name</label>
-                    <input type="text" id="vuln-name" required class="w-full neu-input rounded-xl px-5 py-4">
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Name</label>
+                    <input type="text" id="vuln-name" required class="w-full input-field rounded-lg px-4 py-2.5 text-sm">
                 </div>
-                <div class="mb-6">
+                <div class="mb-4">
                     <label
-                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Platform</label>
-                    <select id="vuln-platform" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Platform</label>
+                    <select id="vuln-platform" class="w-full input-field rounded-lg px-4 py-2.5 appearance-none text-sm">
                         <option value="linux">Linux</option>
                         <option value="windows">Windows</option>
                         <option value="both">Both</option>
                     </select>
                 </div>
-                <div class="mb-10">
+                <div class="mb-6">
                     <label
-                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Target</label>
-                    <select id="vuln-target" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                        class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Target</label>
+                    <select id="vuln-target" class="w-full input-field rounded-lg px-4 py-2.5 appearance-none text-sm">
                         <option value="os">OS</option>
                         <option value="service">Service</option>
                     </select>
                 </div>
-                <div class="flex justify-end gap-5">
+                <div class="flex justify-end gap-3">
                     <button type="button" onclick="closeVulnModal()"
-                        class="neu-btn px-6 py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-sm">Cancel</button>
+                        class="btn px-4 py-2 rounded-lg text-[var(--text-muted)] font-bold uppercase text-xs">Cancel</button>
                     <button type="submit"
-                        class="neu-btn px-8 py-3 rounded-xl text-glow-pink font-bold uppercase text-sm">Save</button>
+                        class="btn px-5 py-2 rounded-lg text-glow-pink font-bold uppercase text-xs">Save</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Misconfig Modal -->
-    <div id="misconfig-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden">
-        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeMisconfigModal()"></div>
-        <div class="neu-flat w-full max-w-lg p-10 rounded-3xl relative z-10 modal-enter">
-            <h2 id="misconfig-modal-title" class="text-2xl font-bold mb-8 text-glow-cyan uppercase tracking-wider">Add
+    <div id="misconfig-modal" class="fixed inset-0 flex items-center justify-center z-50 hidden p-4">
+        <div class="absolute inset-0 bg-black/55 backdrop-blur-sm" onclick="closeMisconfigModal()"></div>
+        <div class="card modal-panel w-full max-w-lg p-6 rounded-xl relative z-10 modal-enter">
+            <h2 id="misconfig-modal-title" class="text-lg font-bold mb-5 text-glow-cyan uppercase tracking-wider">Add
                 Misconfig</h2>
             <form id="misconfig-form" onsubmit="saveMisconfig(event)">
                 <input type="hidden" id="misconfig-id">
                 <input type="hidden" id="misconfig-vuln-id">
-                <div class="mb-6">
-                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Type</label>
-                    <select id="misconfig-type" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Type</label>
+                    <select id="misconfig-type" class="w-full input-field rounded-lg px-4 py-2.5 appearance-none text-sm">
                         <option value="bash">Bash</option>
                         <option value="powershell">PowerShell</option>
                         <option value="command">Command</option>
                     </select>
                 </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Run
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Run
                         As</label>
-                    <select id="misconfig-run-as" class="w-full neu-input rounded-xl px-5 py-4 appearance-none">
+                    <select id="misconfig-run-as" class="w-full input-field rounded-lg px-4 py-2.5 appearance-none text-sm">
                         <option value="root">Root</option>
                         <option value="administrator">Administrator</option>
                         <option value="user">User</option>
                     </select>
                 </div>
-                <div class="mb-10">
+                <div class="mb-6">
                     <label
-                        class="block text-sm font-semibold mb-3 text-[#A0A5B5] uppercase tracking-wide">Script</label>
+                        class="block text-xs font-semibold mb-2 text-[var(--text-faint)] uppercase tracking-wide">Script</label>
                     <textarea id="misconfig-script" rows="4"
-                        class="w-full neu-input rounded-xl px-5 py-4 font-mono text-sm leading-relaxed"></textarea>
+                        class="w-full input-field rounded-lg px-4 py-3 font-mono text-sm leading-relaxed"></textarea>
                 </div>
-                <div class="flex justify-end gap-5">
+                <div class="flex justify-end gap-3">
                     <button type="button" onclick="closeMisconfigModal()"
-                        class="neu-btn px-6 py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-sm">Cancel</button>
+                        class="btn px-4 py-2 rounded-lg text-[var(--text-muted)] font-bold uppercase text-xs">Cancel</button>
                     <button type="submit"
-                        class="neu-btn px-8 py-3 rounded-xl text-glow-cyan font-bold uppercase text-sm">Save</button>
+                        class="btn px-5 py-2 rounded-lg text-glow-cyan font-bold uppercase text-xs">Save</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Confirm Modal -->
-    <div id="confirm-modal" class="fixed inset-0 flex items-center justify-center z-[60] hidden">
-        <div class="absolute inset-0 bg-[#1a1c20]/80 backdrop-blur-sm" onclick="closeConfirmModal()"></div>
-        <div class="neu-flat w-full max-w-sm p-8 rounded-3xl relative z-10 modal-enter text-center">
-            <div class="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center neu-pressed text-[#ec4899]">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div id="confirm-modal" class="fixed inset-0 flex items-center justify-center z-[60] hidden p-4">
+        <div class="absolute inset-0 bg-black/55 backdrop-blur-sm" onclick="closeConfirmModal()"></div>
+        <div class="card modal-panel w-full max-w-sm p-6 rounded-xl relative z-10 modal-enter text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center well text-[var(--accent-pink)]">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
             </div>
-            <h2 id="confirm-modal-title" class="text-xl font-bold mb-3 text-[#E2E8F0] uppercase tracking-wider">Confirm Action</h2>
-            <p id="confirm-modal-message" class="text-sm text-[#A0A5B5] mb-8 leading-relaxed">Are you sure?</p>
-            <div class="flex justify-center gap-4">
-                <button type="button" onclick="closeConfirmModal()" class="flex-1 neu-btn py-3 rounded-xl text-[#A0A5B5] font-bold uppercase text-xs tracking-wide">Cancel</button>
-                <button type="button" id="confirm-modal-btn" class="flex-1 neu-btn py-3 rounded-xl text-[#ec4899] font-bold uppercase text-xs tracking-wide" style="text-shadow: 0 0 10px rgba(236,72,153,0.4)">Delete</button>
+            <h2 id="confirm-modal-title" class="text-base font-bold mb-2 text-[var(--text)] uppercase tracking-wider">Confirm Action</h2>
+            <p id="confirm-modal-message" class="text-sm text-[var(--text-muted)] mb-5 leading-relaxed">Are you sure?</p>
+            <div class="flex justify-center gap-3">
+                <button type="button" onclick="closeConfirmModal()" class="flex-1 btn py-2.5 rounded-lg text-[var(--text-muted)] font-bold uppercase text-xs tracking-wide">Cancel</button>
+                <button type="button" id="confirm-modal-btn" class="flex-1 btn py-2.5 rounded-lg text-[var(--accent-pink)] font-bold uppercase text-xs tracking-wide">Delete</button>
             </div>
         </div>
     </div>

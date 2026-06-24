@@ -3,20 +3,32 @@ let misconfigs = [];
 let scriptEditor = null;
 let confirmActionCallback = null;
 
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('vulndb-theme', theme);
+    document.getElementById('icon-sun')?.classList.toggle('hidden', theme !== 'dark');
+    document.getElementById('icon-moon')?.classList.toggle('hidden', theme === 'dark');
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
 function showConfirmModal(title, message, onConfirm) {
     document.getElementById('confirm-modal-title').innerText = title;
     document.getElementById('confirm-modal-message').innerText = message;
-    
+
     document.getElementById('confirm-modal').classList.remove('hidden');
     setTimeout(() => {
-        document.querySelector('#confirm-modal .neu-flat').classList.add('modal-enter-active');
+        document.querySelector('#confirm-modal .card').classList.add('modal-enter-active');
     }, 10);
-    
+
     confirmActionCallback = onConfirm;
 }
 
 function closeConfirmModal() {
-    const modalContent = document.querySelector('#confirm-modal .neu-flat');
+    const modalContent = document.querySelector('#confirm-modal .card');
     if (modalContent) modalContent.classList.remove('modal-enter-active');
     setTimeout(() => {
         document.getElementById('confirm-modal').classList.add('hidden');
@@ -72,71 +84,72 @@ function render() {
     });
     
     if (filteredVulns.length === 0) {
-        list.innerHTML = '<div class="col-span-full text-center text-[#8b91a3] py-12 neu-pressed rounded-3xl mx-4">No vulnerabilities found matching your criteria.</div>';
+        list.innerHTML = '<div class="col-span-full text-center text-[var(--text-faint)] py-10 well rounded-xl mx-4">No vulnerabilities found matching your criteria.</div>';
         return;
     }
-    
+
     filteredVulns.forEach(vuln => {
         const vulnMisconfigs = misconfigs.filter(m => m.vuln_id === vuln.id);
-        
+
         const card = document.createElement('div');
-        card.className = 'neu-flat rounded-[2rem] p-8 flex flex-col relative overflow-hidden group';
-        
+        card.className = 'card rounded-xl p-4 flex flex-col';
+
         card.innerHTML = `
-            <div class="flex justify-between items-start mb-6 relative z-10">
+            <div class="flex justify-between items-start mb-3">
                 <div>
-                    <h3 class="text-2xl font-bold text-white mb-3 tracking-wide">${vuln.name}</h3>
-                    <div class="flex gap-3">
-                        <span class="px-4 py-1.5 rounded-xl text-xs font-bold text-glow-pink neu-pressed uppercase tracking-wider">${vuln.target}: ${vuln.platform}</span>
-                    </div>
+                    <h3 class="text-base font-bold text-[var(--text)] mb-1.5 tracking-wide">${vuln.name}</h3>
+                    <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-pink well uppercase tracking-wider">${vuln.target}: ${vuln.platform}</span>
                 </div>
-                <div class="flex gap-3">
-                    <button onclick='editVuln(${JSON.stringify(vuln).replace(/'/g, "&apos;")})' class="p-3 neu-btn rounded-xl transition text-glow-cyan" title="Edit Vulnerability">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                <div class="flex gap-2 shrink-0">
+                    <button onclick='editVuln(${JSON.stringify(vuln).replace(/'/g, "&apos;")})' class="p-2 btn rounded-lg text-glow-cyan" title="Edit Vulnerability">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     </button>
-                    <button onclick='deleteVuln(${vuln.id})' class="p-3 neu-btn rounded-xl transition text-[#ec4899]" title="Delete Vulnerability" style="text-shadow: 0 0 10px rgba(236,72,153,0.4)">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <button onclick='deleteVuln(${vuln.id})' class="p-2 btn rounded-lg text-[var(--accent-pink)]" title="Delete Vulnerability">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
             </div>
 
-            <div class="mt-2 flex-1 relative z-10 flex flex-col">
-                <div class="flex items-center justify-between pb-4 mb-4 border-b border-[#2e3238]">
-                    <h4 class="text-sm font-bold text-[#A0A5B5] uppercase tracking-wider flex items-center gap-3">
-                        Misconfigurations 
-                        <span class="neu-pressed px-3 py-1 rounded-lg text-glow-cyan font-bold">${vulnMisconfigs.length}</span>
+            <div class="flex-1 flex flex-col">
+                <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[var(--border)]">
+                    <h4 class="text-xs font-bold text-[var(--text-faint)] uppercase tracking-wider flex items-center gap-2">
+                        Misconfigs
+                        <span class="well px-2 py-0.5 rounded text-glow-cyan font-bold">${vulnMisconfigs.length}</span>
                     </h4>
-                    <button onclick="openMisconfigModal(${vuln.id})" class="text-xs neu-btn px-4 py-2 rounded-xl text-glow-cyan font-bold uppercase tracking-wide flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                    <button onclick="openMisconfigModal(${vuln.id})" class="text-[10px] btn px-2.5 py-1.5 rounded-md text-glow-cyan font-bold uppercase tracking-wide flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
                         Add
                     </button>
                 </div>
-                <div class="space-y-5 mt-2 flex-1 overflow-y-auto pr-4 custom-scrollbar max-h-64">
+                <div class="space-y-2.5 flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-72">
                     ${vulnMisconfigs.map(m => `
-                        <div class="neu-pressed rounded-2xl p-5 group/item relative">
-                            <div class="flex justify-between items-center mb-4">
-                                <span class="text-xs font-mono text-glow-cyan uppercase font-bold tracking-wider">${m.type}</span>
-                                <span class="text-xs text-[#A0A5B5] flex items-center gap-2 uppercase tracking-wider font-bold">
-                                    <svg class="w-4 h-4 text-[#8b91a3]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
+                        <div class="well rounded-lg p-3 group/item relative">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-mono text-[var(--text-faint)] bg-[var(--surface)] border border-[var(--border)] rounded px-1.5 py-0.5">#${m.id}</span>
+                                    <span class="text-xs font-mono text-glow-cyan uppercase font-bold tracking-wider">${m.type}</span>
+                                </div>
+                                <span class="text-[10px] text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider font-bold">
+                                    <svg class="w-3.5 h-3.5 text-[var(--text-faint)]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
                                     ${m.run_as}
                                 </span>
                             </div>
-                            <pre class="text-sm font-mono text-[#E2E8F0] bg-[#1a1c20] p-4 rounded-xl overflow-x-auto shadow-inner leading-relaxed"><code class="language-${m.type === 'powershell' ? 'powershell' : m.type === 'bash' ? 'bash' : 'dos'}">${m.script.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
-                            
-                            <div class="absolute top-4 right-4 opacity-0 group-hover/item:opacity-100 transition-opacity flex gap-2">
-                                <button type="button" class="edit-misconfig-btn p-2 neu-btn rounded-lg text-glow-cyan" title="Edit" data-misconfig='${JSON.stringify(m).replace(/'/g, "&apos;")}'>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                            <pre class="text-xs font-mono text-[var(--text)] bg-[var(--code-bg)] border border-[var(--code-border)] p-3 rounded-md overflow-x-auto leading-relaxed"><code class="language-${m.type === 'powershell' ? 'powershell' : m.type === 'bash' ? 'bash' : 'dos'}">${m.script.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
+
+                            <div class="absolute top-2.5 right-2.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex gap-1.5">
+                                <button type="button" class="edit-misconfig-btn p-1.5 btn rounded-md text-glow-cyan" title="Edit" data-misconfig='${JSON.stringify(m).replace(/'/g, "&apos;")}'>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                 </button>
-                                <button type="button" class="delete-misconfig-btn p-2 neu-btn rounded-lg text-[#ec4899]" title="Delete" data-id="${m.id}" style="text-shadow: 0 0 10px rgba(236,72,153,0.4)">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                <button type="button" class="delete-misconfig-btn p-1.5 btn rounded-md text-[var(--accent-pink)]" title="Delete" data-id="${m.id}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 </button>
                             </div>
                         </div>
                     `).join('')}
                     ${vulnMisconfigs.length === 0 ? `
-                        <div class="flex flex-col items-center justify-center h-full text-[#8b91a3] py-8 neu-pressed rounded-2xl">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-3 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            <span class="text-xs uppercase tracking-widest font-bold opacity-60">No configs yet</span>
+                        <div class="flex flex-col items-center justify-center h-full text-[var(--text-faint)] py-6 well rounded-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            <span class="text-[10px] uppercase tracking-widest font-bold opacity-60">No configs yet</span>
                         </div>
                     ` : ''}
                 </div>
@@ -155,7 +168,7 @@ function render() {
 function openVulnModal(vuln = null) {
     document.getElementById('vuln-modal').classList.remove('hidden');
     setTimeout(() => {
-        document.querySelector('#vuln-modal .neu-flat').classList.add('modal-enter-active');
+        document.querySelector('#vuln-modal .card').classList.add('modal-enter-active');
     }, 10);
     
     if (vuln) {
@@ -172,7 +185,7 @@ function openVulnModal(vuln = null) {
 }
 
 function closeVulnModal() {
-    document.querySelector('#vuln-modal .neu-flat').classList.remove('modal-enter-active');
+    document.querySelector('#vuln-modal .card').classList.remove('modal-enter-active');
     setTimeout(() => {
         document.getElementById('vuln-modal').classList.add('hidden');
     }, 300);
@@ -230,7 +243,7 @@ function deleteVuln(id) {
 function openMisconfigModal(vulnId, misconfig = null) {
     document.getElementById('misconfig-modal').classList.remove('hidden');
     setTimeout(() => {
-        document.querySelector('#misconfig-modal .neu-flat').classList.add('modal-enter-active');
+        document.querySelector('#misconfig-modal .card').classList.add('modal-enter-active');
     }, 10);
     
     document.getElementById('misconfig-vuln-id').value = vulnId;
@@ -255,7 +268,7 @@ function openMisconfigModal(vulnId, misconfig = null) {
 }
 
 function closeMisconfigModal() {
-    document.querySelector('#misconfig-modal .neu-flat').classList.remove('modal-enter-active');
+    document.querySelector('#misconfig-modal .card').classList.remove('modal-enter-active');
     setTimeout(() => {
         document.getElementById('misconfig-modal').classList.add('hidden');
     }, 300);
@@ -318,6 +331,8 @@ function deleteMisconfig(id) {
 
 // Event listeners for search, filters, and delegated clicks
 document.addEventListener('DOMContentLoaded', () => {
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+
     document.getElementById('search-input')?.addEventListener('input', render);
     document.getElementById('filter-platform')?.addEventListener('change', render);
     document.getElementById('filter-target')?.addEventListener('change', render);
