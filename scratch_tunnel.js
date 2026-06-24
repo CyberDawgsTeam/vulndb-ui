@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { Client } = require('ssh2');
 const net = require('net');
 
@@ -7,8 +9,8 @@ const server = net.createServer(socket => {
     sshClient.forwardOut(
         socket.remoteAddress,
         socket.remotePort,
-        '127.0.0.1',
-        3306,
+        process.env.DB_HOST || '127.0.0.1',
+        process.env.DB_PORT || 3306,
         (err, stream) => {
             if (err) {
                 console.error('SSH forwardOut error:', err);
@@ -29,9 +31,9 @@ sshClient.on('ready', () => {
         mysql.createConnection({
             host: '127.0.0.1',
             port: 3308,
-            user: 'vulndb',
-            password: 'WhoAreYou',
-            database: 'vulns'
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            database: process.env.DB_NAME
         }).then(async conn => {
             console.log('MySQL connected!');
             const [rows] = await conn.query('SELECT 1');
@@ -46,8 +48,8 @@ sshClient.on('ready', () => {
 });
 
 sshClient.connect({
-    host: '10.67.2.29',
-    port: 22,
-    username: 'dbuser',
-    password: 'sqordfish01'
+    host: process.env.SSH_HOST,
+    port: process.env.SSH_PORT || 22,
+    username: process.env.SSH_USER,
+    password: process.env.SSH_PASSWORD
 });
