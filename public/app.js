@@ -1,7 +1,7 @@
-let vulnerabilities = [];
-let misconfigs = [];
+let configurations = [];
 let scriptEditor = null;
 let confirmActionCallback = null;
+let activeCategory = '';
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -38,14 +38,14 @@ function closeConfirmModal() {
 
 function initEditor() {
     if (!scriptEditor) {
-        scriptEditor = CodeMirror.fromTextArea(document.getElementById('misconfig-script'), {
+        scriptEditor = CodeMirror.fromTextArea(document.getElementById('config-script'), {
             mode: 'shell',
             theme: 'ayu-dark',
             lineNumbers: true,
             lineWrapping: true
         });
-        
-        document.getElementById('misconfig-type').addEventListener('change', (e) => {
+
+        document.getElementById('config-type').addEventListener('change', (e) => {
             if (scriptEditor) {
                 scriptEditor.setOption("mode", e.target.value === 'powershell' ? 'powershell' : 'shell');
             }
@@ -55,12 +55,8 @@ function initEditor() {
 
 async function fetchData() {
     try {
-        const [vulnsRes, misconfigsRes] = await Promise.all([
-            fetch('/api/vulns'),
-            fetch('/api/misconfigs')
-        ]);
-        vulnerabilities = await vulnsRes.json();
-        misconfigs = await misconfigsRes.json();
+        const res = await fetch('/api/configurations');
+        configurations = await res.json();
         render();
     } catch (err) {
         console.error('Error fetching data:', err);
@@ -68,234 +64,357 @@ async function fetchData() {
     }
 }
 
+function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, exp)).toFixed(exp === 0 ? 0 : 1)} ${units[exp]}`;
+}
+
+function dependencyChip(dep) {
+    const name = typeof dep === 'string' ? dep : dep.name;
+    const vars = typeof dep === 'string' ? null : dep.vars;
+    const varsText = vars && Object.keys(vars).length
+        ? ` {${Object.entries(vars).map(([k, v]) => `${k}: ${v}`).join(', ')}}`
+        : '';
+    return `<span class="px-2.5 py-1 rounded-md text-[10px] font-mono well text-[var(--text-muted)]">${name}${varsText}</span>`;
+}
+
 function render() {
     const list = document.getElementById('vuln-list');
     const searchTerm = document.getElementById('search-input')?.value.toLowerCase() || '';
     const filterPlatform = document.getElementById('filter-platform')?.value || '';
-    const filterTarget = document.getElementById('filter-target')?.value || '';
 
     list.innerHTML = '';
-    
-    let filteredVulns = vulnerabilities.filter(vuln => {
-        const matchesSearch = vuln.name.toLowerCase().includes(searchTerm);
-        const matchesPlatform = filterPlatform === '' || vuln.platform === filterPlatform;
-        const matchesTarget = filterTarget === '' || vuln.target === filterTarget;
-        return matchesSearch && matchesPlatform && matchesTarget;
+
+    // Keep the dependency-name autocomplete list in sync
+    const datalist = document.getElementById('configuration-names');
+    if (datalist) {
+        datalist.innerHTML = configurations.map(c => `<option value="${c.name}"></option>`).join('');
+    }
+
+    let filtered = configurations.filter(config => {
+        const matchesSearch = config.name.toLowerCase().includes(searchTerm);
+        const matchesPlatform = filterPlatform === '' || config.platform === filterPlatform;
+        const matchesCategory = activeCategory === '' || config.category === activeCategory;
+        return matchesSearch && matchesPlatform && matchesCategory;
     });
-    
-    if (filteredVulns.length === 0) {
-        list.innerHTML = '<div class="col-span-full text-center text-[var(--text-faint)] py-10 well rounded-xl mx-4">No vulnerabilities found matching your criteria.</div>';
+
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="col-span-full text-center text-[var(--text-faint)] py-10 well rounded-xl mx-4">No configurations found matching your criteria.</div>';
         return;
     }
 
-    filteredVulns.forEach(vuln => {
-        const vulnMisconfigs = misconfigs.filter(m => m.vuln_id === vuln.id);
+    filtered.forEach(config => {
+        const isService = config.category === 'service';
+        const hasDeps = config.depends_on && config.depends_on.length;
+        const configJson = JSON.stringify(config).replace(/'/g, "&apos;");
 
         const card = document.createElement('div');
         card.className = 'card rounded-xl p-4 flex flex-col';
 
+        const scriptBlock = `<pre class="text-xs font-mono text-[var(--text)] bg-[var(--code-bg)] border border-[var(--code-border)] p-3 rounded-md overflow-x-auto leading-relaxed mb-3"><code class="language-${config.type === 'powershell' ? 'powershell' : config.type === 'bash' ? 'bash' : 'dos'}">${config.script.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>`;
+
         card.innerHTML = `
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <h3 class="text-base font-bold text-[var(--text)] mb-1.5 tracking-wide">${vuln.name}</h3>
-                    <span class="inline-flex gap-1.5">
-                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-pink well uppercase tracking-wider">${vuln.target}</span>
-                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-cyan well uppercase tracking-wider">${vuln.platform}</span>
+                    <h3 class="text-base font-bold text-[var(--text)] mb-1.5 tracking-wide">${config.name}</h3>
+                    <span class="inline-flex gap-1.5 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-pink well uppercase tracking-wider">${config.category}</span>
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold text-glow-cyan well uppercase tracking-wider">${config.platform}</span>
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold well uppercase tracking-wider">${config.run_as}</span>
+                        ${config.attachments && config.attachments.length ? `<span class="px-2.5 py-1 rounded-md text-[10px] font-bold well uppercase tracking-wider" title="${config.attachments.length} attachment(s)">&#128206; ${config.attachments.length}</span>` : ''}
                     </span>
+                    ${isService && hasDeps ? `<div class="flex flex-wrap gap-1 mt-2">${config.depends_on.map(dependencyChip).join('')}</div>` : ''}
                 </div>
                 <div class="flex gap-2 shrink-0">
-                    <button onclick='editVuln(${JSON.stringify(vuln).replace(/'/g, "&apos;")})' class="p-2 btn rounded-lg text-glow-cyan" title="Edit Vulnerability">
+                    <button onclick='editConfig(${configJson})' class="p-2 btn rounded-lg text-glow-cyan" title="Edit Configuration">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     </button>
-                    <button onclick='deleteVuln(${vuln.id})' class="p-2 btn rounded-lg text-[var(--accent-pink)]" title="Delete Vulnerability">
+                    <button onclick='deleteConfig(${config.id})' class="p-2 btn rounded-lg text-[var(--accent-pink)]" title="Delete Configuration">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
             </div>
 
-            <div class="flex-1 flex flex-col">
-                <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[var(--border)]">
-                    <h4 class="text-xs font-bold text-[var(--text-faint)] uppercase tracking-wider flex items-center gap-2">
-                        Misconfigs
-                        <span class="well px-2 py-0.5 rounded text-glow-cyan font-bold">${vulnMisconfigs.length}</span>
-                    </h4>
-                    <button onclick="openMisconfigModal(${vuln.id})" class="text-[10px] btn px-2.5 py-1.5 rounded-md text-glow-cyan font-bold uppercase tracking-wide flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                        Add
-                    </button>
-                </div>
-                <div class="space-y-2.5 flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-72">
-                    ${vulnMisconfigs.map(m => `
-                        <div class="well rounded-lg p-3 group/item relative">
-                            <div class="flex justify-between items-center mb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-mono text-[var(--text-faint)] bg-[var(--surface)] border border-[var(--border)] rounded px-1.5 py-0.5">#${m.id}</span>
-                                    <span class="text-xs font-mono text-glow-cyan uppercase font-bold tracking-wider">${m.type}</span>
-                                </div>
-                                <span class="text-[10px] text-[var(--text-muted)] flex items-center gap-1.5 uppercase tracking-wider font-bold">
-                                    <svg class="w-3.5 h-3.5 text-[var(--text-faint)]" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
-                                    ${m.run_as}
-                                </span>
-                            </div>
-                            <pre class="text-xs font-mono text-[var(--text)] bg-[var(--code-bg)] border border-[var(--code-border)] p-3 rounded-md overflow-x-auto leading-relaxed"><code class="language-${m.type === 'powershell' ? 'powershell' : m.type === 'bash' ? 'bash' : 'dos'}">${m.script.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
+            ${isService ? `<button type="button" onclick='editConfig(${configJson})' class="text-[10px] btn px-2.5 py-1.5 rounded-md text-glow-cyan font-bold uppercase tracking-wide self-start mb-1">View / Edit Script</button>` : scriptBlock}
 
-                            <div class="absolute top-2.5 right-2.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex gap-1.5">
-                                <button type="button" class="edit-misconfig-btn p-1.5 btn rounded-md text-glow-cyan" title="Edit" data-misconfig='${JSON.stringify(m).replace(/'/g, "&apos;")}'>
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                </button>
-                                <button type="button" class="delete-misconfig-btn p-1.5 btn rounded-md text-[var(--accent-pink)]" title="Delete" data-id="${m.id}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
-                    ${vulnMisconfigs.length === 0 ? `
-                        <div class="flex flex-col items-center justify-center h-full text-[var(--text-faint)] py-6 well rounded-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            <span class="text-[10px] uppercase tracking-widest font-bold opacity-60">No configs yet</span>
-                        </div>
-                    ` : ''}
+            ${!isService && hasDeps ? `
+                <div>
+                    <h4 class="text-xs font-bold text-[var(--text-faint)] uppercase tracking-wider mb-2">Depends On</h4>
+                    <div class="flex flex-wrap gap-1.5">${config.depends_on.map(dependencyChip).join('')}</div>
                 </div>
-            </div>
+            ` : ''}
         `;
+
         list.appendChild(card);
     });
-    
+
     // Apply syntax highlighting
     document.querySelectorAll('pre code').forEach((block) => {
         hljs.highlightElement(block);
     });
 }
 
-// Vuln Modal Logic
-function openVulnModal(vuln = null) {
-    document.getElementById('vuln-modal').classList.remove('hidden');
-    setTimeout(() => {
-        document.querySelector('#vuln-modal .card').classList.add('modal-enter-active');
-    }, 10);
-    
-    if (vuln) {
-        document.getElementById('vuln-modal-title').innerText = 'Edit Vulnerability';
-        document.getElementById('vuln-id').value = vuln.id;
-        document.getElementById('vuln-name').value = vuln.name;
-        document.getElementById('vuln-platform').value = vuln.platform;
-        document.getElementById('vuln-target').value = vuln.target;
+// Dependency-row widget logic
+function addVarRow(varsContainer, key = '', value = '') {
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 var-row mt-1.5 min-w-0';
+    row.innerHTML = `
+        <input type="text" class="var-key flex-1 min-w-0 input-field rounded-lg px-3 py-1.5 text-xs" placeholder="KEY" value="${key}">
+        <input type="text" class="var-value flex-1 min-w-0 input-field rounded-lg px-3 py-1.5 text-xs" placeholder="value" value="${value}">
+        <button type="button" class="btn p-1.5 rounded-lg text-[var(--accent-pink)] shrink-0" title="Remove variable">&times;</button>
+    `;
+    row.querySelector('button').addEventListener('click', () => row.remove());
+    varsContainer.appendChild(row);
+}
+
+function moveDependencyRow(row, direction) {
+    const sibling = direction === 'up' ? row.previousElementSibling : row.nextElementSibling;
+    if (!sibling) return;
+    if (direction === 'up') {
+        sibling.before(row);
     } else {
-        document.getElementById('vuln-modal-title').innerText = 'Add Vulnerability';
-        document.getElementById('vuln-form').reset();
-        document.getElementById('vuln-id').value = '';
+        sibling.after(row);
     }
 }
 
-function closeVulnModal() {
-    document.querySelector('#vuln-modal .card').classList.remove('modal-enter-active');
-    setTimeout(() => {
-        document.getElementById('vuln-modal').classList.add('hidden');
-    }, 300);
+function addDependencyRow(name = '', vars = {}) {
+    const container = document.getElementById('dependency-rows');
+    const row = document.createElement('div');
+    row.className = 'well rounded-lg p-3 dependency-row min-w-0';
+    row.innerHTML = `
+        <div class="flex gap-2 mb-1.5 min-w-0">
+            <div class="flex flex-col gap-0.5 shrink-0">
+                <button type="button" class="btn px-1.5 rounded-md text-[var(--text-faint)] move-up-btn leading-none" title="Move up">&uarr;</button>
+                <button type="button" class="btn px-1.5 rounded-md text-[var(--text-faint)] move-down-btn leading-none" title="Move down">&darr;</button>
+            </div>
+            <input type="text" class="dep-name flex-1 min-w-0 input-field rounded-lg px-3 py-2 text-sm" placeholder="configuration name or package" list="configuration-names" value="${name}">
+            <button type="button" class="btn p-2 rounded-lg text-[var(--accent-pink)] shrink-0" title="Remove dependency">&times;</button>
+        </div>
+        <div class="dep-vars min-w-0"></div>
+        <button type="button" class="text-[10px] btn px-2 py-1 rounded-md text-glow-cyan font-bold uppercase tracking-wide add-var-btn mt-1">+ Variable</button>
+    `;
+    row.querySelector('button[title="Remove dependency"]').addEventListener('click', () => row.remove());
+    row.querySelector('.move-up-btn').addEventListener('click', () => moveDependencyRow(row, 'up'));
+    row.querySelector('.move-down-btn').addEventListener('click', () => moveDependencyRow(row, 'down'));
+
+    const varsContainer = row.querySelector('.dep-vars');
+    Object.entries(vars).forEach(([key, value]) => addVarRow(varsContainer, key, value));
+
+    row.querySelector('.add-var-btn').addEventListener('click', () => addVarRow(varsContainer));
+
+    container.appendChild(row);
 }
 
-async function saveVuln(e) {
-    e.preventDefault();
-    const id = document.getElementById('vuln-id').value;
-    const data = {
-        name: document.getElementById('vuln-name').value,
-        platform: document.getElementById('vuln-platform').value,
-        target: document.getElementById('vuln-target').value
-    };
-    
-    const method = id ? 'PUT' : 'POST';
-    const url = id ? '/api/vulns/' + id : '/api/vulns';
-    
-    try {
-        const res = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+function collectDependencies() {
+    const rows = document.querySelectorAll('#dependency-rows .dependency-row');
+    const depends_on = [];
+    rows.forEach(row => {
+        const name = row.querySelector('.dep-name').value.trim();
+        if (!name) return;
+
+        const vars = {};
+        row.querySelectorAll('.var-row').forEach(varRow => {
+            const key = varRow.querySelector('.var-key').value.trim();
+            const value = varRow.querySelector('.var-value').value.trim();
+            if (key) vars[key] = value;
         });
+
+        depends_on.push(Object.keys(vars).length ? { name, vars } : name);
+    });
+    return depends_on;
+}
+
+// Attachment widget logic
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderAttachments(attachments) {
+    const container = document.getElementById('attachment-rows');
+    container.innerHTML = (attachments || []).map(a => `
+        <div class="well rounded-lg p-2.5 flex items-center justify-between gap-2 min-w-0" data-attachment-id="${a.id}">
+            <a href="/api/attachments/${a.id}/download" class="attachment-name text-xs font-mono text-[var(--text)] hover:text-glow-cyan truncate min-w-0">${escapeHtml(a.original_name)}</a>
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[10px] text-[var(--text-faint)]">${formatBytes(a.size_bytes)}</span>
+                <button type="button" onclick="renameAttachment(${a.id})" class="p-1 btn rounded-md text-glow-cyan" title="Rename attachment">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+                <button type="button" onclick="deleteAttachment(${a.id})" class="p-1 btn rounded-md text-[var(--accent-pink)]" title="Delete attachment">&times;</button>
+            </div>
+        </div>
+    `).join('') || '<p class="text-[10px] text-[var(--text-faint)]">No attachments yet.</p>';
+}
+
+function setAttachmentsEnabled(enabled) {
+    document.getElementById('attachment-upload-btn').disabled = !enabled;
+    document.getElementById('attachment-upload-btn').classList.toggle('opacity-40', !enabled);
+    document.getElementById('attachment-hint').classList.toggle('hidden', enabled);
+    if (!enabled) document.getElementById('attachment-rows').innerHTML = '';
+}
+
+function refreshAttachmentsView() {
+    const configId = document.getElementById('config-id').value;
+    renderAttachments((configurations.find(c => c.id == configId) || {}).attachments);
+}
+
+async function uploadAttachment(file) {
+    const configId = document.getElementById('config-id').value;
+    if (!configId || !file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch(`/api/configurations/${configId}/attachments`, { method: 'POST', body: formData });
         if (!res.ok) throw new Error('Server error');
-        closeVulnModal();
-        fetchData();
-    } catch(err) {
-        alert('Error saving vulnerability');
+        await fetchData();
+        refreshAttachmentsView();
+    } catch (err) {
+        alert('Error uploading attachment');
         console.error(err);
     }
 }
 
-function editVuln(vuln) {
-    openVulnModal(vuln);
+function renameAttachment(id) {
+    const row = document.querySelector(`[data-attachment-id="${id}"]`);
+    const anchor = row.querySelector('.attachment-name');
+    const currentName = anchor.textContent;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'attachment-name-input flex-1 min-w-0 input-field rounded-md px-2 py-1 text-xs font-mono';
+    anchor.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let settled = false;
+    const commit = async () => {
+        if (settled) return;
+        settled = true;
+
+        const newName = input.value.trim();
+        if (!newName || newName === currentName) {
+            refreshAttachmentsView();
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/attachments/' + id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ original_name: newName })
+            });
+            if (!res.ok) throw new Error('Server error');
+            await fetchData();
+        } catch (err) {
+            alert('Error renaming attachment');
+            console.error(err);
+        }
+        refreshAttachmentsView();
+    };
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            settled = true;
+            refreshAttachmentsView();
+        }
+    });
+    input.addEventListener('blur', commit);
 }
 
-function deleteVuln(id) {
+function deleteAttachment(id) {
     showConfirmModal(
-        'Delete Vulnerability',
-        'Are you sure you want to delete this vulnerability? All associated misconfigurations will also be deleted.',
+        'Delete Attachment',
+        'Are you sure you want to delete this attachment?',
         async () => {
             try {
-                const res = await fetch('/api/vulns/' + id, { method: 'DELETE' });
+                const res = await fetch('/api/attachments/' + id, { method: 'DELETE' });
                 if (!res.ok) throw new Error('Server error');
-                fetchData();
-            } catch(err) {
-                alert('Error deleting');
+                await fetchData();
+                refreshAttachmentsView();
+            } catch (err) {
+                alert('Error deleting attachment');
                 console.error(err);
             }
         }
     );
 }
 
-// Misconfig Modal Logic
-function openMisconfigModal(vulnId, misconfig = null) {
-    document.getElementById('misconfig-modal').classList.remove('hidden');
+// Configuration Modal Logic
+function openConfigModal(config = null) {
+    document.getElementById('config-modal').classList.remove('hidden');
     setTimeout(() => {
-        document.querySelector('#misconfig-modal .card').classList.add('modal-enter-active');
+        document.querySelector('#config-modal .card').classList.add('modal-enter-active');
     }, 10);
-    
-    document.getElementById('misconfig-vuln-id').value = vulnId;
-    
+
     initEditor();
-    
-    if (misconfig) {
-        document.getElementById('misconfig-modal-title').innerText = 'Edit Misconfig';
-        document.getElementById('misconfig-id').value = misconfig.id;
-        document.getElementById('misconfig-type').value = misconfig.type;
-        document.getElementById('misconfig-run-as').value = misconfig.run_as;
-        scriptEditor.setValue(misconfig.script);
-        scriptEditor.setOption("mode", misconfig.type === 'powershell' ? 'powershell' : 'shell');
+    document.getElementById('dependency-rows').innerHTML = '';
+
+    if (config) {
+        document.getElementById('config-modal-title').innerText = 'Edit Configuration';
+        document.getElementById('config-id').value = config.id;
+        document.getElementById('config-name').value = config.name;
+        document.getElementById('config-platform').value = config.platform;
+        document.getElementById('config-category').value = config.category;
+        document.getElementById('config-type').value = config.type;
+        document.getElementById('config-run-as').value = config.run_as;
+        scriptEditor.setValue(config.script);
+        scriptEditor.setOption("mode", config.type === 'powershell' ? 'powershell' : 'shell');
+
+        (config.depends_on || []).forEach(dep => {
+            if (typeof dep === 'string') addDependencyRow(dep);
+            else addDependencyRow(dep.name, dep.vars || {});
+        });
+
+        setAttachmentsEnabled(true);
+        renderAttachments(config.attachments);
     } else {
-        document.getElementById('misconfig-modal-title').innerText = 'Add Misconfig';
-        document.getElementById('misconfig-form').reset();
-        document.getElementById('misconfig-id').value = '';
+        document.getElementById('config-modal-title').innerText = 'Add Configuration';
+        document.getElementById('config-form').reset();
+        document.getElementById('config-id').value = '';
         scriptEditor.setValue('');
+        setAttachmentsEnabled(false);
     }
-    
+
     setTimeout(() => scriptEditor.refresh(), 50);
 }
 
-function closeMisconfigModal() {
-    document.querySelector('#misconfig-modal .card').classList.remove('modal-enter-active');
+function closeConfigModal() {
+    document.querySelector('#config-modal .card').classList.remove('modal-enter-active');
     setTimeout(() => {
-        document.getElementById('misconfig-modal').classList.add('hidden');
+        document.getElementById('config-modal').classList.add('hidden');
     }, 300);
 }
 
-async function saveMisconfig(e) {
+async function saveConfig(e) {
     e.preventDefault();
     const scriptContent = scriptEditor.getValue().trim();
     if (!scriptContent) {
         alert("Script content cannot be empty.");
         return;
     }
-    
-    const id = document.getElementById('misconfig-id').value;
+
+    const id = document.getElementById('config-id').value;
     const data = {
-        vuln_id: document.getElementById('misconfig-vuln-id').value,
-        type: document.getElementById('misconfig-type').value,
-        run_as: document.getElementById('misconfig-run-as').value,
-        script: scriptContent
+        name: document.getElementById('config-name').value,
+        platform: document.getElementById('config-platform').value,
+        category: document.getElementById('config-category').value,
+        type: document.getElementById('config-type').value,
+        run_as: document.getElementById('config-run-as').value.trim() || 'root',
+        script: scriptContent,
+        depends_on: collectDependencies()
     };
-    
+
     const method = id ? 'PUT' : 'POST';
-    const url = id ? '/api/misconfigs/' + id : '/api/misconfigs';
-    
+    const url = id ? '/api/configurations/' + id : '/api/configurations';
+
     try {
         const res = await fetch(url, {
             method,
@@ -303,28 +422,33 @@ async function saveMisconfig(e) {
             body: JSON.stringify(data)
         });
         if (!res.ok) throw new Error('Server error');
-        closeMisconfigModal();
+        closeConfigModal();
         fetchData();
-    } catch(err) {
-        alert('Error saving misconfig');
+    } catch (err) {
+        alert('Error saving configuration');
         console.error(err);
     }
 }
 
-function editMisconfig(m) {
-    openMisconfigModal(m.vuln_id, m);
+function editConfig(config) {
+    openConfigModal(config);
 }
 
-function deleteMisconfig(id) {
+function deleteConfig(id) {
     showConfirmModal(
-        'Delete Misconfig',
-        'Are you sure you want to delete this misconfig?',
+        'Delete Configuration',
+        'Are you sure you want to delete this configuration?',
         async () => {
             try {
-                const res = await fetch('/api/misconfigs/' + id, { method: 'DELETE' });
+                const res = await fetch('/api/configurations/' + id, { method: 'DELETE' });
+                if (res.status === 409) {
+                    const body = await res.json();
+                    alert(`Can't delete — still depended on by: ${body.dependents.join(', ')}`);
+                    return;
+                }
                 if (!res.ok) throw new Error('Server error');
                 fetchData();
-            } catch(err) {
+            } catch (err) {
                 alert('Error deleting');
                 console.error(err);
             }
@@ -332,37 +456,38 @@ function deleteMisconfig(id) {
     );
 }
 
-// Event listeners for search, filters, and delegated clicks
+// Event listeners for search, filters
 document.addEventListener('DOMContentLoaded', () => {
     applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
 
     document.getElementById('search-input')?.addEventListener('input', render);
     document.getElementById('filter-platform')?.addEventListener('change', render);
-    document.getElementById('filter-target')?.addEventListener('change', render);
-    
+
+    document.querySelectorAll('#category-tabs .tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            activeCategory = btn.dataset.category;
+            document.querySelectorAll('#category-tabs .tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+            render();
+        });
+    });
+    document.querySelector('#category-tabs .tab-btn[data-category=""]')?.classList.add('active');
+
+    document.getElementById('attachment-upload-btn')?.addEventListener('click', () => {
+        if (!document.getElementById('attachment-upload-btn').disabled) {
+            document.getElementById('attachment-file-input').click();
+        }
+    });
+    document.getElementById('attachment-file-input')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        uploadAttachment(file);
+        e.target.value = '';
+    });
+
     document.getElementById('confirm-modal-btn')?.addEventListener('click', () => {
         if (confirmActionCallback) {
             confirmActionCallback();
         }
         closeConfirmModal();
-    });
-    
-    // Delegated click listeners for dynamically rendered misconfig buttons
-    document.body.addEventListener('click', (e) => {
-        const deleteBtn = e.target.closest('.delete-misconfig-btn');
-        if (deleteBtn) {
-            e.preventDefault();
-            deleteMisconfig(deleteBtn.dataset.id);
-            return;
-        }
-        
-        const editBtn = e.target.closest('.edit-misconfig-btn');
-        if (editBtn) {
-            e.preventDefault();
-            const misconfigData = JSON.parse(editBtn.dataset.misconfig);
-            editMisconfig(misconfigData);
-            return;
-        }
     });
 });
 
